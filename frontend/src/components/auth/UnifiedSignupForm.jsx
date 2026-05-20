@@ -17,11 +17,14 @@ const UnifiedSignupForm = ({
   setProfileImage,
   setProfileImagePreview,
   setFaceEmbedding,
+  setFaceEmbeddingSamples,
+  setFaceLivenessScore,
   profileImagePreview,
   errors 
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const isDark = theme === 'dark';
+  const safeDepartments = Array.isArray(departments) ? departments : [];
 
   const passwordRequirements = [
     { label: '8+ Characters', met: formData.password.length >= 8 },
@@ -175,7 +178,7 @@ const UnifiedSignupForm = ({
                   className={`${inputClass} appearance-none pr-10`}
                 >
                   <option value="">Select Department</option>
-                  {departments?.map(dept => (
+                  {safeDepartments.map(dept => (
                     <option key={dept._id} value={dept._id}>{dept.name}</option>
                   ))}
                 </select>
@@ -289,9 +292,11 @@ const UnifiedSignupForm = ({
                       : (isDark ? 'border-white/10' : 'border-slate-200')
                   }`}>
                     <ProfileCameraCapture 
-                      onImageCapture={(file, embedding) => {
+                      onImageCapture={(file, embedding, meta = {}) => {
                         setProfileImage(file);
                         setFaceEmbedding(embedding);
+                        setFaceEmbeddingSamples(meta.samples || []);
+                        setFaceLivenessScore(meta.livenessScore || 0);
                         setProfileImagePreview(URL.createObjectURL(file));
                       }} 
                     />

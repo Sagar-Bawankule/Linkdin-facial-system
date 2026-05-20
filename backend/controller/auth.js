@@ -7,6 +7,173 @@ const Department = require('../model/department');
 const Groups = require('../model/groups');
 const mongoose = require('mongoose');
 const Classroom = require('./../model/classroom')
+
+const STRICT_REGISTRATION_SAMPLE_COUNT = 3;
+const STRICT_SAMPLE_DISTANCE_THRESHOLD = 0.22;
+const STRICT_LIVENESS_THRESHOLD = 0.7;
+
+const parseMaybeJson = (value) => {
+    if (typeof value !== 'string') {
+        return value;
+    }
+
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        return value;
+    }
+};
+
+const calculateEuclideanDistance = (embedding1, embedding2) => {
+    if (embedding1.length !== embedding2.length) {
+        throw new Error('Embedding vectors must have the same length');
+    }
+
+    let sum = 0;
+    for (let i = 0; i < embedding1.length; i += 1) {
+        const diff = embedding1[i] - embedding2[i];
+        sum += diff * diff;
+    }
+
+    return Math.sqrt(sum);
+};
+
+const averageEmbeddings = (embeddings) => {
+    if (!Array.isArray(embeddings) || embeddings.length === 0) {
+        return null;
+    }
+
+    const vectorLength = embeddings[0].length;
+    const totals = new Array(vectorLength).fill(0);
+
+    embeddings.forEach((embedding) => {
+        if (!Array.isArray(embedding) || embedding.length !== vectorLength) {
+            return;
+        }
+
+        embedding.forEach((value, index) => {
+            totals[index] += value;
+        });
+    });
+
+    return totals.map((value) => value / embeddings.length);
+};
+
+const calculateAveragePairwiseDistance = (embeddings) => {
+    if (!Array.isArray(embeddings) || embeddings.length < 2) {
+        return Number.POSITIVE_INFINITY;
+    }
+
+    const distances = [];
+    for (let i = 0; i < embeddings.length; i += 1) {
+        for (let j = i + 1; j < embeddings.length; j += 1) {
+            distances.push(calculateEuclideanDistance(embeddings[i], embeddings[j]));
+        }
+    }
+
+    return distances.reduce((total, value) => total + value, 0) / distances.length;
+};
+
+const normalizeRegistrationEmbedding = ({ faceEmbedding, faceEmbeddingSamples, faceLivenessScore, role }) => {
+    const parsedEmbedding = parseMaybeJson(faceEmbedding);
+    const parsedSamples = parseMaybeJson(faceEmbeddingSamples);
+    const parsedLivenessScore = Number(faceLivenessScore || 0);
+    const needsSamples = !role || role.toLowerCase() !== 'parent';
+
+    if (!parsedEmbedding && !parsedSamples) {
+        return {
+            ok: false,
+            message: 'Face capture is required. Please capture a clear face image and try again.'
+        };
+    }
+
+    if (parsedSamples) {
+        if (!Array.isArray(parsedSamples) || parsedSamples.length < STRICT_REGISTRATION_SAMPLE_COUNT) {
+            return {
+                ok: false,
+                message: 'Three stable face samples are required. Please recapture your face.'
+            };
+        }
+
+        const validSamples = parsedSamples.filter((sample) => Array.isArray(sample) && sample.length > 0);
+        if (validSamples.length < STRICT_REGISTRATION_SAMPLE_COUNT) {
+            return {
+                ok: false,
+                message: 'One or more face samples were invalid. Please recapture your face.'
+            };
+        }
+
+        const referenceLength = validSamples[0].length;
+        const hasMismatchedLength = validSamples.some((sample) => sample.length !== referenceLength);
+        if (hasMismatchedLength) {
+            return {
+                ok: false,
+                message: 'Face samples are inconsistent. Please recapture your face.'
+            };
+        }
+
+        const averageDistance = calculateAveragePairwiseDistance(validSamples);
+        if (!Number.isFinite(averageDistance) || averageDistance > STRICT_SAMPLE_DISTANCE_THRESHOLD) {
+            return {
+                ok: false,
+                message: 'Face samples were too unstable. Please hold steady and try again.'
+            };
+        }
+
+        if (parsedLivenessScore && parsedLivenessScore < STRICT_LIVENESS_THRESHOLD) {
+            return {
+                ok: false,
+                message: 'Liveness check failed. Please recapture your face in better lighting.'
+            };
+        }
+
+        const averagedEmbedding = averageEmbeddings(validSamples);
+        if (!averagedEmbedding) {
+            return {
+                ok: false,
+                message: 'Unable to process face samples. Please recapture your face.'
+            };
+        }
+
+        if (Array.isArray(parsedEmbedding)) {
+            const mismatchDistance = calculateEuclideanDistance(parsedEmbedding, averagedEmbedding);
+            if (mismatchDistance > 0.01) {
+                return {
+                    ok: false,
+                    message: 'Face capture data did not match the sampled frames. Please recapture your face.'
+                };
+            }
+        }
+
+        return {
+            ok: true,
+            embedding: averagedEmbedding,
+            samples: validSamples,
+            livenessScore: parsedLivenessScore || Math.max(0, Math.min(0.99, 1 - (averageDistance / 0.35)))
+        };
+    }
+
+    if (needsSamples) {
+        return {
+            ok: false,
+            message: 'Three stable face samples are required for student registration.'
+        };
+    }
+
+    if (!Array.isArray(parsedEmbedding) || parsedEmbedding.length === 0) {
+        return {
+            ok: false,
+            message: 'Face embedding data is empty. Please recapture your face and try again.'
+        };
+    }
+
+    return {
+        ok: true,
+        embedding: parsedEmbedding,
+        samples: [],
+        livenessScore: parsedLivenessScore
+    };
+};
 // Login controller remains unchanged
 const login = async (req, res) => {
     try {
@@ -74,6 +241,8 @@ const signup = async (req, res) => {
                 dateOfBirth,
                 gender,
                 faceEmbedding,
+                faceEmbeddingSamples,
+                faceLivenessScore,
                 studentEmail  // For parent linking
             } = req.body;
             
@@ -81,14 +250,22 @@ const signup = async (req, res) => {
               role, 
               email, 
               hasFile: !!req.file, 
-              hasEmbedding: !!faceEmbedding,
+                            hasEmbedding: !!faceEmbedding,
+                            hasEmbeddingSamples: !!faceEmbeddingSamples,
               department 
             });
             
-            // Only require faceEmbedding for students (NOT for teachers or parents)
+            // Only require face capture for non-parent accounts.
             const isParent = role && role.toLowerCase() === 'parent';
-            if (!faceEmbedding && role && role.toLowerCase() !== 'teacher' && !isParent) {
-                return res.status(400).json({ message: 'Face capture is required. Please capture a clear face image and try again.' });
+            const normalizedFaceCapture = normalizeRegistrationEmbedding({
+                faceEmbedding,
+                faceEmbeddingSamples,
+                faceLivenessScore,
+                role
+            });
+
+            if (!normalizedFaceCapture.ok) {
+                return res.status(400).json({ message: normalizedFaceCapture.message });
             }
 
             // For parent role: validate that studentEmail is provided and the student exists
@@ -104,20 +281,8 @@ const signup = async (req, res) => {
                 linkedStudentId = linkedStudentUser._id;
             }
 
-            let parsedEmbedding = null;
-            if (faceEmbedding && faceEmbedding !== 'undefined' && faceEmbedding !== 'null' && faceEmbedding !== '') {
-                try {
-                    parsedEmbedding = typeof faceEmbedding === 'string'
-                        ? JSON.parse(faceEmbedding)
-                        : faceEmbedding;
-                } catch (parseError) {
-                    return res.status(400).json({ message: 'Invalid face embedding data. Please recapture your face and try again.' });
-                }
-
-                if (!Array.isArray(parsedEmbedding) || parsedEmbedding.length === 0) {
-                    return res.status(400).json({ message: 'Face embedding data is empty. Please recapture your face and try again.' });
-                }
-            }
+            const parsedEmbedding = normalizedFaceCapture.embedding;
+            const parsedEmbeddingSamples = normalizedFaceCapture.samples;
 
             let parsedPermanentAddress = permanentAddress;
             let parsedCurrentAddress = currentAddress;
@@ -141,10 +306,54 @@ const signup = async (req, res) => {
             if (!password) {
                 return res.status(400).json({ message: 'Password is required' });
             }
+
+            const normalizedRole = role ? role.toLowerCase() : undefined;
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
             
             // Check if user already exists
             const existingUser = await User.findOne({ email });
             if (existingUser) {
+                if (normalizedRole === 'teacher' && existingUser.role === 'teacher') {
+                    existingUser.firstName = firstName || existingUser.firstName;
+                    existingUser.lastName = lastName || existingUser.lastName;
+                    existingUser.password = hashedPassword;
+                    existingUser.role = 'teacher';
+                    existingUser.status = 'active';
+                    existingUser.mobile = mobile || existingUser.mobile;
+                    existingUser.permanentAddress = parsedPermanentAddress || existingUser.permanentAddress;
+                    existingUser.currentAddress = parsedCurrentAddress || existingUser.currentAddress;
+                    existingUser.department = existingUser.department || undefined;
+                    existingUser.employeeId = employeeId || existingUser.employeeId;
+                    existingUser.dateOfBirth = dateOfBirth || existingUser.dateOfBirth;
+                    existingUser.gender = gender ? gender.toLowerCase() : existingUser.gender;
+                    existingUser.profileImage = req.file ? (req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`) : existingUser.profileImage;
+
+                    if (parsedEmbedding) {
+                        const embeddingDoc = new Embedding({
+                            user: existingUser._id,
+                            embedding: parsedEmbedding,
+                            isActive: true
+                        });
+                        await embeddingDoc.save();
+                        existingUser.faceEmbedding = embeddingDoc._id;
+                    }
+
+                    await existingUser.save();
+
+                    const token = jwt.sign(
+                        { userId: existingUser._id, role: existingUser.role, status: existingUser.status },
+                        process.env.JWT_SECRET,
+                        { expiresIn: '24h' }
+                    );
+
+                    return res.status(200).json({
+                        message: 'Teacher account updated successfully and is ready to use.',
+                        token,
+                        user: existingUser
+                    });
+                }
+
                 return res.status(400).json({ message: '[Auth:UserExists] User with this email already exists.' });
             }
 
@@ -168,10 +377,6 @@ const signup = async (req, res) => {
                 }
             }
 
-            // Hash password
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(password, salt);
-
             // Create new user without embedding reference first
             const user = new User({
                 firstName,
@@ -190,7 +395,7 @@ const signup = async (req, res) => {
                 dateOfBirth: dateOfBirth || undefined,
                 gender: gender ? gender.toLowerCase() : undefined,  
                 profileImage: req.file ? (req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`) : null,
-                status: (role && (role.toLowerCase() === 'teacher' || role.toLowerCase() === 'student')) ? 'pending' : 'active',
+                status: (role && role.toLowerCase() === 'teacher') ? 'active' : 'active',
                 linkedStudent: linkedStudentId || undefined,
             });
 
@@ -315,4 +520,4 @@ const getDepartments = async (req, res) => {
 const getGroups = async(req, res) => {
 
 }
-module.exports = { login, signup, me , getDepartments, getGroups};
+module.exports = { login, signup, me , getDepartments, getGroups};

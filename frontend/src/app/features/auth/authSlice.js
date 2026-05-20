@@ -106,7 +106,7 @@
         })
         .addCase(getDepartments.fulfilled, (state, action) => {
           // Ensure departments is always an array (empty when none or on errors)
-          state.departments = action.payload || [];
+          state.departments = Array.isArray(action.payload) ? action.payload : [];
         })
         .addCase(getCurrentUser.rejected, (state) => {
           state.isLoading = false;

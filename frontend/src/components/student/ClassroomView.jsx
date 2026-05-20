@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Calendar, Clock, FileText, BookOpen, CheckCircle, AlertCircle, CheckCheck, MapPin, Award, TrendingUp, Trophy } from 'lucide-react';
 import { useTheme } from '../../context/ThemeProvider';
 import ClassesSection from './ClassesSection';
 import { getClassesByClassroom } from '../../app/features/class/classThunks';
 import { reset } from '../../app/features/classroom/classroomSlice';
-import IntegratedAttendanceComponent from './IntegratedAttendanceComponent';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import {
@@ -34,6 +34,7 @@ const ClassroomView = ({
 
   // Redux state
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { classes, isLoading, isError, message } = useSelector((state) => state.classes);
   const { user, isAuthenticated } = useSelector(state => state.auth);
   const { sharedMaterials, currentClassroom } = useSelector((state) => state.classrooms);
@@ -533,7 +534,7 @@ const ClassroomView = ({
   };
   
   // Function to check location and mark attendance with toast notifications
-  const handleLocationAndAttendance = async ({ classId, location }) => {
+  const handleLocationAndAttendance = async ({ classId, location, antiSpoofScore }) => {
     try {
       // Show toast for location verification process
       const locationToastId = toast.info(
@@ -555,7 +556,7 @@ const ClassroomView = ({
 
       // Call the actual location verification & attendance marking
       const result = await dispatch(
-        checkLocationValidityAndMarkPresent({ classId, location, skipWindowCheck: true })
+        checkLocationValidityAndMarkPresent({ classId, location, antiSpoofScore, skipWindowCheck: true })
       ).unwrap();
       
       // Dismiss the location checking toast
@@ -638,24 +639,11 @@ const ClassroomView = ({
     }
   };
 
-  // Open attendance modal
+  // Open attendance page
   const openAttendanceModal = (classItem) => {
-    // Ensure we have proper structure in the class item
-    // IntegratedAttendanceComponent expects to access classItem._id
-    // but ClassroomView may provide classItem.originalData._id
-    
-    console.log("Opening attendance modal for class:", classItem);
-    
-    // Set the class item with proper structure
-    setSelectedClass({
-      // Ensure _id is available at the top level
-      _id: classItem._id || (classItem.originalData && classItem.originalData._id) || classItem.id,
-      // Keep the full original data
-      ...classItem
-    });
-    
-    // Then show the modal
-    setShowAttendanceModal(true);
+    const targetClassId = classItem._id || (classItem.originalData && classItem.originalData._id) || classItem.id;
+    console.log("Navigating to attendance page for class:", targetClassId);
+    navigate(`/student/attendance/mark/${targetClassId}`);
   };
   
   // Mock class data for demonstration - using your provided schedule format
@@ -1159,16 +1147,6 @@ const ClassroomView = ({
           </div>
         )}
       </div>
-      {showAttendanceModal && 
-      <IntegratedAttendanceComponent
-      isOpen={showAttendanceModal}
-      onClose={() => setShowAttendanceModal(false)}
-      classItem={selectedClass}
-      verifyFace={handleVerifyFace}
-      checkLocationAndMarkPresent={handleLocationAndAttendance}
-      isDark={isDark} // Use the actual theme context instead of hardcoded value
-    />
-      }
     </div>
   );
 };

@@ -1,6 +1,51 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as faceapi from "face-api.js";
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const averageEmbeddings = (embeddings) => {
+  if (!embeddings || embeddings.length === 0) {
+    return null;
+  }
+
+  const vectorLength = embeddings[0].length;
+  const totals = new Array(vectorLength).fill(0);
+
+  embeddings.forEach((embedding) => {
+    if (!Array.isArray(embedding) || embedding.length !== vectorLength) {
+      return;
+    }
+
+    embedding.forEach((value, index) => {
+      totals[index] += value;
+    });
+  });
+
+  return totals.map((value) => value / embeddings.length);
+};
+
+const calculateLivenessScore = (embeddings) => {
+  if (!embeddings || embeddings.length < 2) {
+    return 0;
+  }
+
+  const distances = [];
+  for (let i = 0; i < embeddings.length; i += 1) {
+    for (let j = i + 1; j < embeddings.length; j += 1) {
+      let sum = 0;
+      for (let index = 0; index < embeddings[i].length; index += 1) {
+        const diff = embeddings[i][index] - embeddings[j][index];
+        sum += diff * diff;
+      }
+      distances.push(Math.sqrt(sum));
+    }
+  }
+
+  const averageDistance = distances.reduce((total, value) => total + value, 0) / distances.length;
+  const score = 1 - (averageDistance / 0.5);
+  return Math.max(0, Math.min(0.99, score));
+};
+
 const AutoFaceDetector = ({ onEmbeddingGenerated, autoCapture = true, colors }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -328,19 +373,55 @@ const AutoFaceDetector = ({ onEmbeddingGenerated, autoCapture = true, colors }) 
       tempCanvas.width = videoRef.current.videoWidth;
       tempCanvas.height = videoRef.current.videoHeight;
       const ctx = tempCanvas.getContext('2d');
-      ctx.drawImage(videoRef.current, 0, 0, tempCanvas.width, tempCanvas.height);
-      
-      // Get face descriptors (embeddings)
-      console.log("Extracting face descriptors");
-      const fullFaceDescriptions = await faceapi
-        .detectAllFaces(tempCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-        .withFaceLandmarks()
-        .withFaceDescriptors();
-      
-      if (fullFaceDescriptions.length === 0) {
+      const embeddingSamples = [];
+      const SAMPLE_COUNT = 3;
+      const SAMPLE_DELAY_MS = 120;
+
+      const MAX_ATTEMPTS = 5;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+        if (embeddingSamples.length >= SAMPLE_COUNT) break;
+        if (attempt > 0) {
+          await wait(SAMPLE_DELAY_MS);
+        }
+
+        // Guard: video may have been stopped during async wait
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          console.warn("Video became unavailable during sampling, using collected samples");
+          break;
+        }
+
+        ctx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+        ctx.drawImage(videoRef.current, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        const fullFaceDescriptions = await faceapi
+          .detectAllFaces(tempCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        if (fullFaceDescriptions.length === 0) {
+          console.warn("Missed face in this frame, skipping...");
+          continue;
+        }
+
+        embeddingSamples.push(Array.from(fullFaceDescriptions[0].descriptor));
+      }
+
+      const averagedEmbedding = averageEmbeddings(embeddingSamples);
+      if (!averagedEmbedding) {
+        setError("Unable to stabilize face data. Please try again.");
+        setProcessingCapture(false);
+        setCaptureComplete(false);
+        detectFace(); // Restart detection loop
+        return;
+      }
+
+      const livenessScore = calculateLivenessScore(embeddingSamples);
+
+      if (embeddingSamples.length === 0) {
         setError("No face detected. Please ensure your face is clearly visible.");
         setProcessingCapture(false);
         setCaptureComplete(false); 
+        detectFace(); // Restart detection loop
         return;
       }
       
@@ -348,22 +429,27 @@ const AutoFaceDetector = ({ onEmbeddingGenerated, autoCapture = true, colors }) 
       
       // Capture the face region from the last detection
       let faceImageUrl = null;
-      if (lastDetectionRef.current) {
-        const box = lastDetectionRef.current.detection.box;
-        const faceCanvas = document.createElement('canvas');
-        faceCanvas.width = box.width;
-        faceCanvas.height = box.height;
-        const faceCtx = faceCanvas.getContext('2d');
-        
-        // Draw the cropped face from the video stream
-        faceCtx.drawImage(
-          videoRef.current,
-          box.x, box.y, box.width, box.height,
-          0, 0, box.width, box.height,
-        );
-        
-        // Convert canvas to image URL
-        faceImageUrl = faceCanvas.toDataURL('image/jpeg');
+      if (lastDetectionRef.current && tempCanvas.width > 0) {
+        try {
+          const box = lastDetectionRef.current.detection.box;
+          const faceCanvas = document.createElement('canvas');
+          faceCanvas.width = Math.max(1, Math.round(box.width));
+          faceCanvas.height = Math.max(1, Math.round(box.height));
+          const faceCtx = faceCanvas.getContext('2d');
+          
+          // Draw the cropped face from the already-captured tempCanvas (not from videoRef
+          // which may have been stopped/nullified during async processing)
+          faceCtx.drawImage(
+            tempCanvas,
+            Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height),
+            0, 0, faceCanvas.width, faceCanvas.height,
+          );
+          
+          // Convert canvas to image URL
+          faceImageUrl = faceCanvas.toDataURL('image/jpeg');
+        } catch (cropErr) {
+          console.warn("Could not crop face image, continuing without it:", cropErr);
+        }
       }
       
       // Convert to blob
@@ -377,15 +463,19 @@ const AutoFaceDetector = ({ onEmbeddingGenerated, autoCapture = true, colors }) 
         
        
         const imageFile = new File([blob], `face_auth_${Date.now()}.png`, { type: 'image/png' });
-        
-        // Extract the face embedding
-        const embedding = Array.from(fullFaceDescriptions[0].descriptor);
+
+        // Extract the averaged face embedding
+        const embedding = averagedEmbedding;
         
         console.log("Face embedding generated successfully");
         
         
         if (onEmbeddingGenerated) {
-          onEmbeddingGenerated(imageFile, embedding, faceImageUrl);
+          onEmbeddingGenerated(imageFile, embedding, faceImageUrl, {
+            samples: embeddingSamples,
+            livenessScore,
+            captureCount: SAMPLE_COUNT
+          });
         }
         
       }, 'image/png');

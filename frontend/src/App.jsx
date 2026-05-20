@@ -14,6 +14,8 @@ import StudentMaterialsPage from './pages/student/StudentMaterialsPage';
 import StudentAssessmentsPage from './pages/student/StudentAssessmentsPage';
 import StudentGroupPage from './pages/student/StudentGroupPage';
 import StudentQuizAttemptPage from './pages/student/StudentQuizAttemptPage';
+import StudentProfilePage from './pages/student/StudentProfilePage';
+import StudentSettingsPage from './pages/student/StudentSettingsPage';
 
 import ClassMaterials from "./pages/student/ClassMaterials";
 import StudentClassroomPortal from "./pages/student/StudentClassroomPortal";
@@ -25,6 +27,8 @@ import TeacherAttendanceDashboard from "./pages/teacher/TeacherAttendanceDashboa
 import TeacherResultsPage from './pages/teacher/TeacherResultsPage';
 import TeacherMaterialsPage from './pages/teacher/TeacherMaterialsPage';
 import TeacherQuizzesPage from './pages/teacher/TeacherQuizzesPage';
+import TeacherProfilePage from './pages/teacher/TeacherProfilePage';
+import TeacherSettingsPage from './pages/teacher/TeacherSettingsPage';
 
 // Admin Components
 import DashboardOverview from './components/admin/DashboardOverview';
@@ -84,6 +88,8 @@ function App() {
         <Route path="attendance" element={<StudentCoursesPage />} />
         <Route path="results" element={<StudentResultsPage />} />
         <Route path="group" element={<StudentGroupPage />} />
+        <Route path="profile" element={<StudentProfilePage />} />
+        <Route path="settings" element={<StudentSettingsPage />} />
         <Route path="attendance/mark/:classId" element={<StudentMarkAttendance />} />
         <Route path="quiz/:classroomId/:assessmentId" element={<StudentQuizAttemptPage />} />
         
@@ -110,6 +116,8 @@ function App() {
         <Route path="materials" element={<TeacherMaterialsPage />} />
         <Route path="quizzes" element={<TeacherQuizzesPage />} />
         <Route path="results" element={<TeacherResultsPage />} />
+        <Route path="profile" element={<TeacherProfilePage />} />
+        <Route path="settings" element={<TeacherSettingsPage />} />
         <Route path="students" element={<EnrolledUsersPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
       </Route>
@@ -159,4 +167,4 @@ function App() {
   );
 }
 
-export default App;
+export default App;

@@ -54,7 +54,7 @@ const StudentMarkAttendance = () => {
         }
     }, []);
 
-    const handleFaceCapture = async (imageFile, embedding) => {
+    const handleFaceCapture = async (imageFile, embedding, _faceImageUrl, meta = {}) => {
         if (status === 'processing') return;
         
         setStatus('processing');
@@ -69,7 +69,8 @@ const StudentMarkAttendance = () => {
                     classId,
                     faceEmbeddingData: embedding,
                     location: location,
-                    skipWindowCheck: true
+                    skipWindowCheck: true,
+                    antiSpoofScore: meta.livenessScore || 0
                 },
                 {
                     headers: { Authorization: `Bearer ${token}` }

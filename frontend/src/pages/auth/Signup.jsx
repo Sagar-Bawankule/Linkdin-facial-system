@@ -20,10 +20,13 @@ const Signup = () => {
     const { isLoading: isSubmitting, isSuccess, isError, isAuthenticated, message, departments } = useSelector(
       (state) => state.auth
     );
+    const safeDepartments = Array.isArray(departments) ? departments : [];
 
     const [profileImage, setProfileImage] = useState(null);
     const [profileImagePreview, setProfileImagePreview] = useState(null);
     const [faceEmbedding, setFaceEmbedding] = useState(null);
+    const [faceEmbeddingSamples, setFaceEmbeddingSamples] = useState([]);
+    const [faceLivenessScore, setFaceLivenessScore] = useState(0);
     
     const [formData, setFormData] = useState({
       firstName: '', lastName: '', email: '', password: '', 
@@ -115,6 +118,8 @@ const Signup = () => {
       
       if (profileImage) registrationData.append('profileImage', profileImage);
       if (faceEmbedding) registrationData.append('faceEmbedding', JSON.stringify(faceEmbedding));
+      if (faceEmbeddingSamples.length > 0) registrationData.append('faceEmbeddingSamples', JSON.stringify(faceEmbeddingSamples));
+      if (faceLivenessScore) registrationData.append('faceLivenessScore', String(faceLivenessScore));
       
       dispatch(register(registrationData));
     };
@@ -133,10 +138,12 @@ const Signup = () => {
           handleSubmit={handleSubmit}
           isSubmitting={isSubmitting}
           theme={theme}
-          departments={departments || []}
+          departments={safeDepartments}
           setProfileImage={setProfileImage}
           setProfileImagePreview={setProfileImagePreview}
           setFaceEmbedding={setFaceEmbedding}
+          setFaceEmbeddingSamples={setFaceEmbeddingSamples}
+          setFaceLivenessScore={setFaceLivenessScore}
           profileImagePreview={profileImagePreview}
           errors={errors}
         />

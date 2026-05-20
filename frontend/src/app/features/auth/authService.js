@@ -69,8 +69,13 @@ const getCurrentUser = async () => {
 const getDepartments = async() => {
     try {
       const response = await axiosInstance.get('/auth/departments');
-      // Expecting an array from backend
-      return response.data || [];
+      const payload = response?.data;
+
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.departments)) return payload.departments;
+      if (Array.isArray(payload?.data)) return payload.data;
+
+      return [];
     } catch (error) {
       console.log('error occured in fetching departments', error?.message || error);
       // Return empty array on network/error so callers can continue gracefully

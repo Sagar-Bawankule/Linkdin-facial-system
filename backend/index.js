@@ -27,7 +27,7 @@ const assessmentRoutes = require('./routes/assessmentRoutes');
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: ['https://smartattend-rho.vercel.app', 'https://project-i3sw.vercel.app','https://project-bkly.vercel.app','http://localhost:5173', "https://smartattend-ishika2236s-projects.vercel.app", "https://smartattend-rho.vercel.app", "https://smartattend-git-master-ishika2236s-projects.vercel.app"],
+        origin: ['https://smartattend-rho.vercel.app', 'https://project-i3sw.vercel.app','https://project-bkly.vercel.app','http://localhost:5173','http://localhost:5174', "https://smartattend-ishika2236s-projects.vercel.app", "https://smartattend-rho.vercel.app", "https://smartattend-git-master-ishika2236s-projects.vercel.app"],
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         credentials: true,
     }
@@ -69,7 +69,7 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-    origin: ['https://smartattend-rho.vercel.app', 'https://project-i3sw.vercel.app','https://project-bkly.vercel.app','http://localhost:5173', "https://smartattend-ishika2236s-projects.vercel.app", "https://smartattend-rho.vercel.app", "https://smartattend-git-master-ishika2236s-projects.vercel.app"],
+    origin: ['https://smartattend-rho.vercel.app', 'https://project-i3sw.vercel.app','https://project-bkly.vercel.app','http://localhost:5173','http://localhost:5174', "https://smartattend-ishika2236s-projects.vercel.app", "https://smartattend-rho.vercel.app", "https://smartattend-git-master-ishika2236s-projects.vercel.app"],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
 }));

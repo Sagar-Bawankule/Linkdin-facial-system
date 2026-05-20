@@ -67,9 +67,9 @@ export const getClassAttendance = createAsyncThunk(
 // Student Async Thunks
 export const markAttendanceByFaceAndLocation = createAsyncThunk(
   'attendance/markByFaceAndLocation',
-  async ({ classId, faceEmbeddingData, location }, thunkAPI) => {
+  async ({ classId, faceEmbeddingData, location, antiSpoofScore }, thunkAPI) => {
     try {
-      return await attendanceService.markAttendanceByFaceAndLocation(classId, faceEmbeddingData, location);
+      return await attendanceService.markAttendanceByFaceAndLocation(classId, faceEmbeddingData, location, antiSpoofScore);
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to mark attendance';
       return thunkAPI.rejectWithValue(message);
@@ -116,9 +116,9 @@ export const verifyFaceEmbedding = createAsyncThunk(
 // Location Verification Thunk
 export const checkLocationValidityAndMarkPresent = createAsyncThunk(
   'attendance/checkLocation',
-  async ({ classId, location, skipWindowCheck }, thunkAPI) => {
+  async ({ classId, location, antiSpoofScore, skipWindowCheck }, thunkAPI) => {
     try {
-      return await attendanceService.checkLocationValidity(classId, location, skipWindowCheck);
+      return await attendanceService.checkLocationValidity(classId, location, antiSpoofScore, skipWindowCheck);
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to verify location';
       return thunkAPI.rejectWithValue(message);

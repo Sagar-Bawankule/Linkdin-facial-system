@@ -19,6 +19,27 @@ const Navbar = ({
   const dispatch = useDispatch();
   const { user, isAuthenticated } = useSelector(state => state.auth);
 
+  const role = user?.role;
+  const profileRoute = role === 'admin'
+    ? '/admin/dashboard'
+    : role === 'teacher'
+      ? '/teacher/profile'
+      : role === 'student'
+        ? '/student/profile'
+        : role === 'parent'
+          ? '/parent/dashboard'
+          : '/';
+
+  const settingsRoute = role === 'admin'
+    ? '/admin/adminSettings'
+    : role === 'teacher'
+      ? '/teacher/settings'
+      : role === 'student'
+        ? '/student/settings'
+        : role === 'parent'
+          ? '/parent/dashboard'
+          : '/';
+
   const toggleDropdown = () => {
     setShowDropdown(!showDropdown);
     if (showNotificationsPanel) setShowNotificationsPanel(false);
@@ -123,13 +144,13 @@ const Navbar = ({
                    <p className="font-black text-sm">{user?.email}</p>
                 </div>
                 <Link
-                  to="/profile"
+                  to={profileRoute}
                   className={`flex items-center gap-3 p-3.5 text-sm rounded-2xl transition-all duration-300 font-black uppercase tracking-widest ${isDark ? 'hover:bg-white/5 text-slate-400' : 'hover:bg-slate-50 text-slate-600'}`}
                 >
                   <User size={18} className="text-brand-primary" /> Profile
                 </Link>
                 <Link
-                  to="/settings"
+                  to={settingsRoute}
                   className={`flex items-center gap-3 p-3.5 text-sm rounded-2xl transition-all duration-300 font-black uppercase tracking-widest ${isDark ? 'hover:bg-white/5 text-slate-400' : 'hover:bg-slate-50 text-slate-600'}`}
                 >
                   <Settings size={18} className="text-slate-400" /> Settings

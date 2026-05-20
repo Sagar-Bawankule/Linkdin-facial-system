@@ -1,6 +1,53 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as faceapi from "face-api.js";
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const averageEmbeddings = (embeddings) => {
+  if (!embeddings || embeddings.length === 0) {
+    return null;
+  }
+
+  const vectorLength = embeddings[0].length;
+  const totals = new Array(vectorLength).fill(0);
+
+  embeddings.forEach((embedding) => {
+    if (!Array.isArray(embedding) || embedding.length !== vectorLength) {
+      return;
+    }
+
+    embedding.forEach((value, index) => {
+      totals[index] += value;
+    });
+  });
+
+  return totals.map((value) => value / embeddings.length);
+};
+
+const calculateLivenessScore = (embeddings) => {
+  if (!embeddings || embeddings.length < 2) {
+    return 0;
+  }
+
+  const distances = [];
+  for (let i = 0; i < embeddings.length; i += 1) {
+    for (let j = i + 1; j < embeddings.length; j += 1) {
+      let sum = 0;
+      for (let index = 0; index < embeddings[i].length; index += 1) {
+        const diff = embeddings[i][index] - embeddings[j][index];
+        sum += diff * diff;
+      }
+      distances.push(Math.sqrt(sum));
+    }
+  }
+
+  const averageDistance = distances.reduce((total, value) => total + value, 0) / distances.length;
+  const score = 1 - (averageDistance / 0.5);
+  return Math.max(0, Math.min(0.99, score));
+};
+
+const MIN_LIVENESS_SCORE = 0.7;
+
 const ProfileCameraCapture = ({ onImageCapture }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -11,6 +58,7 @@ const ProfileCameraCapture = ({ onImageCapture }) => {
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [faceEmbedding, setFaceEmbedding] = useState(null);
+  const [captureProgress, setCaptureProgress] = useState(0);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showVideoCanvas, setShowVideoCanvas] = useState(false);
@@ -271,61 +319,92 @@ const ProfileCameraCapture = ({ onImageCapture }) => {
       setError(null);
       console.log("Attempting to capture image");
       const video = videoRef.current;
-      
-      // Detect face and get descriptor (embedding)
-      const detections = await faceapi
-        .detectAllFaces(video, new faceapi.SsdMobilenetv1Options())
-        .withFaceLandmarks()
-        .withFaceDescriptors();
-      
-      if (detections.length === 0) {
-        setError("No face detected. Please ensure your face is clearly visible.");
-        return;
-      }
-      
-      console.log("Face detected for capture");
-      
-      // Create a canvas to capture the image
+      const embeddingSamples = [];
+      const SAMPLE_COUNT = 3;
+      const SAMPLE_DELAY_MS = 140;
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = video.videoWidth;
       tempCanvas.height = video.videoHeight;
       const ctx = tempCanvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
       
-      // Convert to blob and then to file
-      tempCanvas.toBlob((blob) => {
-        if (!blob) {
-          setError("Failed to create image blob");
+      for (let sampleIndex = 0; sampleIndex < SAMPLE_COUNT; sampleIndex += 1) {
+        if (sampleIndex > 0) {
+          await wait(SAMPLE_DELAY_MS);
+        }
+
+        ctx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+        ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        const detections = await faceapi
+          .detectAllFaces(tempCanvas, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 }))
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        if (detections.length === 0) {
+          setError("No face detected. Please ensure your face is clearly visible.");
           setIsCapturing(false);
           return;
         }
-        
-        // Create file from blob
-        const imageFile = new File([blob], `profile_${Date.now()}.png`, { type: 'image/png' });
-        
-        // Store the face embedding
-        const embedding = Array.from(detections[0].descriptor);
-        setFaceEmbedding(embedding);
-        
-        // Create image preview URL
-        const imageUrl = URL.createObjectURL(blob);
-        setCapturedImage(imageUrl);
-        
-        // Call the parent component's handler with both the image file and embedding
-        if (onImageCapture) {
-          onImageCapture(imageFile, embedding);
-        }
-        
-        // Stop the camera and hide video/canvas
-        stopCamera();
-        setShowVideoCanvas(false);
+
+        embeddingSamples.push(Array.from(detections[0].descriptor));
+        setCaptureProgress(sampleIndex + 1);
+      }
+      
+      console.log("Face detected for capture");
+
+      const averagedEmbedding = averageEmbeddings(embeddingSamples);
+      if (!averagedEmbedding) {
+        setError("Unable to stabilize face data. Please try again.");
         setIsCapturing(false);
-      }, 'image/png');
+        return;
+      }
+
+      const livenessScore = calculateLivenessScore(embeddingSamples);
+      if (livenessScore < MIN_LIVENESS_SCORE) {
+        setError("Face capture was too unstable. Please hold steady and capture again.");
+        setIsCapturing(false);
+        return;
+      }
+      
+      // Convert to blob and then to file
+      const blob = await new Promise((resolve) => tempCanvas.toBlob(resolve, 'image/png'));
+
+      if (!blob) {
+        setError("Failed to create image blob");
+        setIsCapturing(false);
+        return;
+      }
+
+      // Create file from blob
+      const imageFile = new File([blob], `profile_${Date.now()}.png`, { type: 'image/png' });
+
+      // Store the face embedding
+      setFaceEmbedding(averagedEmbedding);
+
+      // Create image preview URL
+      const imageUrl = URL.createObjectURL(blob);
+      setCapturedImage(imageUrl);
+
+      // Call the parent component's handler with both the image file and embedding
+      if (onImageCapture) {
+        onImageCapture(imageFile, averagedEmbedding, {
+          samples: embeddingSamples,
+          livenessScore,
+          captureCount: SAMPLE_COUNT
+        });
+      }
+
+      // Stop the camera and hide video/canvas
+      stopCamera();
+      setShowVideoCanvas(false);
+      setIsCapturing(false);
+      setCaptureProgress(0);
       
     } catch (error) {
       console.error("Error capturing image:", error);
       setError(`Error capturing image: ${error.message}`);
       setIsCapturing(false);
+      setCaptureProgress(0);
     }
   };
 
@@ -334,6 +413,7 @@ const ProfileCameraCapture = ({ onImageCapture }) => {
     setCapturedImage(null);
     setFaceEmbedding(null);
     setError(null);
+    setCaptureProgress(0);
     if (onImageCapture) {
       onImageCapture(null, null);
     }
@@ -387,7 +467,7 @@ const ProfileCameraCapture = ({ onImageCapture }) => {
             disabled={!isModelLoaded || !isVideoReady || loading || isCapturing}
             className={`px-3 py-2 text-white rounded-lg ${(!isModelLoaded || !isVideoReady || loading || isCapturing) ? 'bg-green-400 cursor-not-allowed opacity-70' : 'bg-green-600'}`}
           >
-            {isCapturing ? 'Capturing...' : (!isModelLoaded || !isVideoReady ? 'Initializing...' : 'Capture')}
+            {isCapturing ? `Capturing ${Math.max(captureProgress, 1)}/3...` : (!isModelLoaded || !isVideoReady ? 'Initializing...' : 'Capture 3 Photos')}
           </button>
           <button
             type="button"
@@ -431,6 +511,9 @@ const ProfileCameraCapture = ({ onImageCapture }) => {
               Use Photo
             </button>
           </div>
+          <p className="text-xs text-gray-500 text-center max-w-xs">
+            Guided registration uses 3 stable samples and rejects unstable captures for better face accuracy.
+          </p>
         </div>
       )}
     </div>

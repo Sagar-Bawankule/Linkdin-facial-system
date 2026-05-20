@@ -9,7 +9,7 @@ const RecognitionAttempt = require('../model/recognitionAttempt');
 // Cosine similarity stays high (~0.9+) even for completely different people's faces,
 // which allows any face (or a celebrity photo) to pass verification.
 // Euclidean distance: 0 = identical, higher = more different.
-// Typical threshold: < 0.5 = same person, >= 0.5 = different person.
+// Typical threshold: < 0.4 = same person, >= 0.4 = different person.
 const calculateEuclideanDistance = (embedding1, embedding2) => {
   if (embedding1.length !== embedding2.length) {
     throw new Error('Embedding vectors must have the same length');
@@ -119,8 +119,8 @@ const embeddingController = {
       // Get the top match
       const bestMatch = similarities[0];
 
-      // Strict threshold: face-api.js distance < 0.45 = same person, >= 0.45 = different person
-      const DISTANCE_THRESHOLD = 0.45;
+      // Stricter threshold to reduce false accepts from lookalike faces.
+      const DISTANCE_THRESHOLD = 0.38;
 
       if (bestMatch.distance >= DISTANCE_THRESHOLD) {
         console.log('Best match distance:', bestMatch.distance, '(rejected - above threshold)');

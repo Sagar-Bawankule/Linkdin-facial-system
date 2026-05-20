@@ -1,0 +1,10 @@
+opencv-python
+onnxruntime
+numpy
+fastapi
+uvicorn
+filterpy
+scipy
+python-multipart
+python-dotenv
+requests

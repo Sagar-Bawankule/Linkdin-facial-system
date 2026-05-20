@@ -43,11 +43,12 @@ const getClassAttendance = async (classId) => {
 };
 
 // Student Services
-const markAttendanceByFaceAndLocation = async (classId, faceEmbeddingData, location) => {
+const markAttendanceByFaceAndLocation = async (classId, faceEmbeddingData, location, antiSpoofScore = null) => {
   const response = await axiosInstance.post(`${API_URL}/mark`, { 
     classId, 
     faceEmbeddingData, 
-    location 
+    location,
+    antiSpoofScore
   });
   return response.data;
 };
@@ -72,10 +73,11 @@ const verifyFaceEmbedding = async (faceEmbeddingData) => {
 };
 
 // New Location Verification Service
-const checkLocationValidity = async (classId, location, skipWindowCheck = false) => {
+const checkLocationValidity = async (classId, location, antiSpoofScore = null, skipWindowCheck = false) => {
   const response = await axiosInstance.post(`${API_URL}/verify-location`, { 
     classId, 
     location,
+    antiSpoofScore,
     skipWindowCheck
   });
   return response.data;
