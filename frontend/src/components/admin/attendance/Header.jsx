@@ -24,7 +24,7 @@ const Header = ({
         )}
       </div>
       
-      <h1 className={`text-2xl font-bold ${isDark ? currentTheme.gradient.text : 'text-gray-800'}`}>
+      <h1 className={`text-2xl font-bold ${isDark ? (currentTheme.gradient?.text || 'text-slate-100') : 'text-gray-800'}`}>
         {activeView === 'overview' && 'Attendance Management Dashboard'}
         {activeView === 'course' && selectedCourse?.courseName}
         {activeView === 'group' && `${selectedCourse?.courseName} - ${selectedGroup?.name}`}

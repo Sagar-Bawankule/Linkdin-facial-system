@@ -8,7 +8,7 @@ const DepartmentHeader = ({ onCreateClick, onSearch, searchTerm }) => {
   
   return (
     <div className="mb-6">
-      <h1 className={`text-2xl font-bold mb-2 ${theme === 'dark' ? currentTheme.gradient.text : 'text-gray-800'}`}>
+      <h1 className={`text-2xl font-bold mb-2 ${theme === 'dark' ? (currentTheme.gradient?.text || 'text-slate-100') : 'text-gray-800'}`}>
         Department Management
       </h1>
       <p className={`${currentTheme.secondaryText} mb-6`}>

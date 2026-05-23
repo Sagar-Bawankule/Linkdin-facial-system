@@ -59,6 +59,9 @@ export const ThemeProvider = ({ children }) => {
       text: 'text-slate-100',
       secondaryText: 'text-slate-400',
       gradientBackground: 'bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#312e81]',
+      gradient: {
+        text: 'text-transparent bg-clip-text bg-gradient-to-r from-brand-primary to-brand-secondary'
+      },
       card: 'glass-dark rounded-2xl shadow-2xl border border-white/5',
       icon: 'text-brand-primary',
       button: {
@@ -77,6 +80,9 @@ export const ThemeProvider = ({ children }) => {
       text: 'text-slate-900',
       secondaryText: 'text-slate-500',
       gradientBackground: 'bg-white',
+      gradient: {
+        text: 'text-transparent bg-clip-text bg-gradient-to-r from-brand-primary to-brand-secondary'
+      },
       card: 'glass-card rounded-2xl shadow-md border border-slate-200',
       icon: 'text-brand-primary',
       button: {
