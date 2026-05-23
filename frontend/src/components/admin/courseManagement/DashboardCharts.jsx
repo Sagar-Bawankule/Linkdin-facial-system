@@ -7,7 +7,7 @@ import { PieChart as PieIcon, BarChart2, TrendingUp, Info } from 'lucide-react';
 const CHART_COLORS = ['#506EE5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
 
 const ChartContainer = ({ title, icon: Icon, children, isDark }) => (
-  <div className={`p-6 rounded-[2rem] border transition-all hover:shadow-xl ${isDark ? 'bg-[#121A22] border-[#1E2733] shadow-black/20 text-white' : 'bg-white border-gray-100 shadow-sm'}`}>
+  <div className={`relative p-6 rounded-[2rem] border transition-all hover:shadow-xl ${isDark ? 'bg-[#121A22] border-[#1E2733] shadow-black/20 text-white' : 'bg-white border-gray-100 shadow-sm'}`}>
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-brand-primary/10 text-brand-primary' : 'bg-indigo-50 text-indigo-600'}`}>
@@ -130,7 +130,6 @@ const CourseStatusChart = ({ courses, isDark }) => {
       </ResponsiveContainer>
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-center pointer-events-none">
          <p className="text-2xl font-black">{Math.round((activeCount/courses.length)*100 || 0)}%</p>
-         <p className="text-[10px] uppercase font-bold text-gray-400">Yield</p>
       </div>
     </ChartContainer>
   );
