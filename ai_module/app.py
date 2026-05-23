@@ -24,30 +24,30 @@ app.add_middleware(
 # Initialize models with error handling
 try:
     detector = SCRFDDetector()
-    print("✓ Face detector (SCRFD) loaded")
+    print("[OK] Face detector (SCRFD) loaded")
 except Exception as e:
-    print(f"✗ Failed to load detector: {e}")
+    print(f"[ERROR] Failed to load detector: {e}")
     detector = None
 
 try:
     recognizer = ArcFaceRecognizer()
-    print("✓ Face recognizer (ArcFace) loaded")
+    print("[OK] Face recognizer (ArcFace) loaded")
 except Exception as e:
-    print(f"✗ Failed to load recognizer: {e}")
+    print(f"[ERROR] Failed to load recognizer: {e}")
     recognizer = None
 
 try:
     anti_spoof = AntiSpoofingModel()
-    print("✓ Anti-spoofing model loaded (or will skip liveness checks)")
+    print("[OK] Anti-spoofing model loaded (or will skip liveness checks)")
 except Exception as e:
-    print(f"✗ Failed to load anti-spoof: {e}")
+    print(f"[ERROR] Failed to load anti-spoof: {e}")
     anti_spoof = None
 
 try:
     tracker = ByteTracker()
-    print("✓ Face tracker loaded")
+    print("[OK] Face tracker loaded")
 except Exception as e:
-    print(f"✗ Failed to load tracker: {e}")
+    print(f"[ERROR] Failed to load tracker: {e}")
     tracker = None
 
 fusion_engine = ConfidenceFusionEngine()
